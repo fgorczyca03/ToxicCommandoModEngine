@@ -1,0 +1,3 @@
+# No third-party runtime dependencies required for CLI/GUI scanner.
+# Optional packager for producing a Windows executable:
+pyinstaller>=6.0
