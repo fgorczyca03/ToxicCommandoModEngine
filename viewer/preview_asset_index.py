@@ -12,6 +12,17 @@ import json
 from pathlib import Path
 
 
+def _extract_rows(data: object) -> list[dict]:
+    """Support both legacy list output and current object payload."""
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        assets = data.get("assets", [])
+        if isinstance(assets, list):
+            return assets
+    raise ValueError("Unsupported index format.")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Preview packed asset metadata.")
     parser.add_argument("index_json", type=Path, help="Path to metadata JSON file.")
@@ -29,9 +40,10 @@ def main() -> int:
     source = args.index_json.expanduser().resolve()
 
     data = json.loads(source.read_text(encoding="utf-8"))
-    rows = data[: args.limit]
+    all_rows = _extract_rows(data)
+    rows = all_rows[: args.limit]
 
-    print(f"Loaded {len(data)} packed assets from {source}")
+    print(f"Loaded {len(all_rows)} packed assets from {source}")
     print(f"Showing first {len(rows)} entries")
     print("-" * 100)
     print(f"{'type':<10} {'size_bytes':>12}  relative_path")

@@ -112,7 +112,11 @@ class AssetScannerGUI(tk.Tk):
         try:
             extensions = parse_extensions(extension_text)
             assets = scan_game_directory(Path(game_dir_text), extensions)
-            output_path = write_index_json(Path(output_text), assets)
+            output_path = write_index_json(
+                Path(output_text),
+                assets,
+                Path(game_dir_text).expanduser().resolve(),
+            )
         except Exception as exc:  # user-facing GUI error path
             messagebox.showerror("Scan failed", str(exc))
             self._append_status(f"Error: {exc}")

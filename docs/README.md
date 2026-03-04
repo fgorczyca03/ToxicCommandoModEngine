@@ -13,12 +13,17 @@ assets in *John Carpenter's Toxic Commando* without redistributing copyrighted g
 
 ### 1) CLI scanner (first working extractor)
 
-`extractor/scan_packed_assets.py` recursively scans a game folder and outputs JSON entries containing:
+`extractor/scan_packed_assets.py` recursively scans a game folder and outputs a JSON document with:
 
-- `file_name`
-- `relative_path`
-- `size_bytes`
-- `file_type`
+- `schema_version`
+- `generated_at_utc`
+- `scanned_root`
+- `asset_count`
+- `assets[]` entries containing:
+  - `file_name`
+  - `relative_path`
+  - `size_bytes`
+  - `file_type`
 
 The script only stores metadata and never copies file contents.
 

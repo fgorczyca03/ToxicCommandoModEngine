@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -68,12 +69,19 @@ def detect_type(file_path: Path) -> str:
 
 
 def iter_packed_files(root: Path, extensions: set[str]) -> Iterable[PackedAsset]:
-    """Yield packed asset metadata for files with matching extensions."""
+    """Yield packed asset metadata for files with matching extensions.
+
+    Paths that fail stat/read checks (permission issues, broken links) are skipped
+    to keep long scans resilient.
+    """
     for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.suffix.lower() not in extensions:
+        try:
+            if not path.is_file() or path.suffix.lower() not in extensions:
+                continue
+            stat = path.stat()
+        except OSError:
             continue
 
-        stat = path.stat()
         yield PackedAsset(
             file_name=path.name,
             relative_path=str(path.relative_to(root)),
@@ -90,14 +98,24 @@ def scan_game_directory(game_dir: Path, extensions: set[str]) -> list[PackedAsse
     return list(iter_packed_files(resolved_dir, extensions))
 
 
-def write_index_json(output_path: Path, assets: Sequence[PackedAsset]) -> Path:
-    """Write packed-asset metadata rows to a JSON file."""
+def write_index_json(output_path: Path, assets: Sequence[PackedAsset], scanned_root: Path) -> Path:
+    """Write packed-asset metadata rows to a JSON file.
+
+    Output shape keeps metadata and includes a minimal header for future
+    compatibility in viewer tooling.
+    """
     resolved_output = output_path.expanduser().resolve()
     resolved_output.parent.mkdir(parents=True, exist_ok=True)
-    resolved_output.write_text(
-        json.dumps([asdict(item) for item in assets], indent=2),
-        encoding="utf-8",
-    )
+
+    payload = {
+        "schema_version": 1,
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "scanned_root": str(scanned_root),
+        "asset_count": len(assets),
+        "assets": [asdict(item) for item in assets],
+    }
+
+    resolved_output.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return resolved_output
 
 
@@ -124,7 +142,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--extensions",
         type=parse_extensions,
-        default=DEFAULT_PACKED_EXTENSIONS,
+        default=set(DEFAULT_PACKED_EXTENSIONS),
         help=(
             "Comma-separated extension list to scan (default: a curated set of "
             "common package/container formats)."
@@ -138,13 +156,14 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
-        assets = scan_game_directory(args.game_dir, args.extensions)
+        game_dir = args.game_dir.expanduser().resolve()
+        assets = scan_game_directory(game_dir, args.extensions)
     except ValueError as exc:
         parser.error(str(exc))
 
-    output_path = write_index_json(args.output, assets)
+    output_path = write_index_json(args.output, assets, game_dir)
 
-    print(f"Scanned: {args.game_dir.expanduser().resolve()}")
+    print(f"Scanned: {game_dir}")
     print(f"Found packed files: {len(assets)}")
     print(f"Metadata JSON written to: {output_path}")
     return 0
